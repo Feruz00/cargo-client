@@ -25,14 +25,18 @@ export default defineConfig({
     },
   },
   build: {
-    cssCodeSplit: false, // Merge all CSS into one file (reduces requests)
-    minify: 'esbuild', // or 'terser'
-    sourcemap: false, // disable in prod
+    cssCodeSplit: false,
+    minify: 'esbuild',
+    sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Group heavy deps
-          vendor: ['vue', 'vue-router', 'axios' /* add others */],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('vue')) return 'vue';
+            if (id.includes('vue-router')) return 'router';
+            if (id.includes('axios')) return 'axios';
+            return 'vendor'; // fallback
+          }
         },
       },
     },
