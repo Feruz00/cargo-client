@@ -4,7 +4,7 @@
   <template v-else-if="!isError">
     <PageHeader
       pageName="Ulanyjylar bölümi"
-      :btn="auth.user?.role === 'user'"
+      :btn="auth.user?.role === 'admin'"
       :btnName="'Täze ulanyjy döret'"
       :btnHref="'create-user'"
       :selectedRows="selectedRows"
@@ -157,7 +157,7 @@
           width="7rem"
           dataIndex="id"
           fixed="right"
-          v-if="auth.user?.role === 'user'"
+          v-if="auth.user?.role === 'admin'"
         >
           <template #default="{ text }">
             <div class="flex flex-row items-center gap-2 text-base">
