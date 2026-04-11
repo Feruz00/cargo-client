@@ -79,6 +79,36 @@
     >
       <div class="flex flex-col gap-2 mt-4">
         <a-button
+          type="text"
+          block
+          class="flex items-center justify-start gap-2"
+          @click="go('/head')"
+        >
+          <ContainerOutlined />
+          Maglumatlar
+        </a-button>
+
+        <a-button
+          type="text"
+          block
+          class="flex items-center justify-start gap-2"
+          @click="go('/head/users')"
+        >
+          <UserOutlined />
+          Ulanyjylar
+        </a-button>
+
+        <a-button
+          type="text"
+          block
+          class="flex items-center justify-start gap-2"
+          @click="go('/head/chart')"
+        >
+          <LineChartOutlined />
+          Grafiki seljerme
+        </a-button>
+
+        <a-button
           danger
           block
           class="flex items-center justify-start gap-2"
