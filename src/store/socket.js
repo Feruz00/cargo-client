@@ -16,6 +16,7 @@ export const useSocketStore = defineStore('socket', () => {
     socket.value = io(import.meta.env.VITE_SOCKET_URL, {
       query: { id: authStore.user.id, role: authStore.user.role },
       transports: ['polling', 'websocket'],
+      withCredentials: true,
     });
 
     socket.value.on('connect', () => {
