@@ -103,63 +103,113 @@ function generateColors(count) {
 // =========================
 // 📊 CHART OPTION
 // =========================
+function parseDateByGroup(raw, groupBy) {
+  if (groupBy === 'weekly') {
+    // handle ISO week or fallback
+    return dayjs(raw).startOf('isoWeek');
+  }
+
+  if (groupBy === 'monthly') {
+    return dayjs(raw).startOf('month');
+  }
+
+  return dayjs(raw); // daily
+}
 const chartOption = computed(() => {
   if (!data.value) return null;
 
   const labels = data.value.labels || [];
   const datasets = data.value.datasets || [];
-
   const colors = generateColors(datasets.length);
+  const group = data.value.groupBy;
 
   return {
+    backgroundColor: 'transparent',
+
     tooltip: {
       trigger: 'axis',
+      formatter: (params) => {
+        const date = dayjs(params[0].value[0]).format(
+          group === 'monthly'
+            ? 'YYYY-MM'
+            : group === 'weekly'
+              ? '[Week] WW YYYY'
+              : 'DD MMM YYYY'
+        );
+
+        let result = `${date}<br/>`;
+        params.forEach((p) => {
+          result += `${p.marker} ${p.seriesName}: ${p.value[1]}<br/>`;
+        });
+        return result;
+      },
     },
+
     legend: {
       top: 0,
+      left: 'center',
     },
+
     grid: {
       left: '3%',
-      right: '3%',
-      bottom: '3%',
+      right: '4%',
+      bottom: 70,
       containLabel: true,
     },
+
+    // ✅ FIXED TIME AXIS
     xAxis: {
-      type: 'category',
-      data: labels.map((d) =>
-        dayjs(d).format(
-          data.value.groupBy === 'monthly'
-            ? 'YYYY-MM'
-            : data.value.groupBy === 'weekly'
-              ? '[Week] WW'
-              : 'DD MMM'
-        )
-      ),
+      type: 'time',
+      axisLabel: {
+        rotate: -45,
+        formatter: (value) =>
+          dayjs(value).format(
+            group === 'monthly'
+              ? 'YYYY-MM'
+              : group === 'weekly'
+                ? '[W]WW'
+                : 'DD MMM'
+          ),
+      },
     },
+
     yAxis: {
       type: 'value',
+      name: 'Maglumat sany',
     },
+
     series: datasets.map((ds, index) => ({
-      name: ds.label,
+      name: ds.label || 'Unknown',
       type: data.value.chart === 'bar' ? 'bar' : 'line',
-      data: ds.data,
-      smooth: true,
+
+      // ✅ CORE FIX (time-safe)
+      data: ds.data.map((val, i) => {
+        const date = parseDateByGroup(labels[i], group);
+        return [date.valueOf(), val];
+      }),
+
+      smooth: data.value.chart === 'line',
+
       itemStyle: {
         color: colors[index],
       },
+
       lineStyle: {
         color: colors[index],
+        width: 2,
       },
-      areaStyle:
-        data.value.chart === 'line'
-          ? {
-              color: chroma(colors[index]).alpha(0.2).css(),
-            }
-          : undefined,
+
+      // ❌ REMOVE AREA BACKGROUND
+      areaStyle: undefined,
+
+      // optional: cleaner points
+      symbol: 'circle',
+      symbolSize: 6,
     })),
+
+    dataZoom: [{ type: 'slider', start: 0, end: 100 }, { type: 'inside' }],
   };
 });
-
 // =========================
 // 🔌 SOCKET LIVE UPDATE
 // =========================
