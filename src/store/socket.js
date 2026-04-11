@@ -13,11 +13,14 @@ export const useSocketStore = defineStore('socket', () => {
   const onlineUsers = useOnlineUser();
   const connect = () => {
     if (!authStore.user?.id) return;
-    socket.value = io(import.meta.env.VITE_SOCKET_URL, {
-      query: { id: authStore.user.id, role: authStore.user.role },
-      transports: ['polling', 'websocket'],
-      withCredentials: true,
-    });
+    socket.value = io(
+      import.meta.env.VITE_SOCKET_URL || window.location.origin,
+      {
+        query: { id: authStore.user.id, role: authStore.user.role },
+        withCredentials: true,
+        transports: ['websocket'],
+      }
+    );
 
     socket.value.on('connect', () => {
       isConnected.value = true;
