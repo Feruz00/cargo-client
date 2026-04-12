@@ -69,6 +69,7 @@
         :pagination="false"
         :rowKey="(record) => record.rowId"
         :rowClassName="getRowClass"
+        @change="onTableChange"
         bordered
         :scroll="{ x: 'max-content', y: '650px' }"
       >
