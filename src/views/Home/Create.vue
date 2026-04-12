@@ -46,6 +46,21 @@
                 v-else-if="field.type === 'number'"
                 v-model:value="form[field.key]"
                 class="w-full"
+                placeholder="Giriziň..."
+              />
+
+              <a-select
+                v-else-if="field.type === 'enum'"
+                v-model:value="form[field.key]"
+                :options="
+                  field.enums.map((row) => ({
+                    value: row.name,
+                    label: row.name,
+                  }))
+                "
+                class="w-full"
+                style="width: 100%"
+                :placeholder="`${field.name} saýlaň`"
               />
 
               <!-- DATE -->
@@ -53,7 +68,7 @@
                 v-else-if="field.type === 'date'"
                 v-model:value="form[field.key]"
                 class="w-full"
-                format="YYYY-MM-DD HH:mm"
+                format="YYYY-MM-DD"
               />
             </a-form-item>
 

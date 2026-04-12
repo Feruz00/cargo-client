@@ -67,9 +67,7 @@
         :dataSource="data?.data || []"
         :loading="isFetching"
         :pagination="false"
-        :rowKey="
-          (record) => record.rowNum + '-' + (rowHighlights[record.rowNum] || '')
-        "
+        :rowKey="(record) => record.rowId"
         :rowClassName="getRowClass"
         bordered
         :scroll="{ x: 'max-content', y: '650px' }"
@@ -82,22 +80,161 @@
         </a-table-column>
 
         <!-- dynamic fields -->
-        <a-table-column
-          v-for="field in filteredFields"
-          :key="field.key"
-          :title="field.name"
-          :dataIndex="field.key"
-          width="10rem"
-          ellipsis
-        >
-          <template #default="{ text }">
-            {{
-              field.type === 'date'
-                ? dayjs(text).format('YYYY-MM-DD HH:mm')
-                : text
-            }}
-          </template>
-        </a-table-column>
+        <template v-for="field in filteredFields" :key="field.key">
+          <a-table-column
+            v-if="field.type === 'enum'"
+            :title="field.name"
+            width="14rem"
+            :dataIndex="field.key"
+            :key="`enum-${field.key}`"
+            :filters="
+              (field.enums || []).map((row) => ({
+                text: row.name,
+                value: row.name,
+              }))
+            "
+            :filteredValue="
+              filterValues[field.key] ? filterValues[field.key] : null
+            "
+            :filterMultiple="true"
+          >
+            <template #default="{ text }">
+              <a-tag
+                v-if="text"
+                :style="{
+                  backgroundColor: getEnumColor(field, text),
+                  color: '#fff',
+                  border: 'none',
+                }"
+              >
+                {{ text }}
+              </a-tag>
+              <span v-else>—</span>
+            </template>
+          </a-table-column>
+
+          <a-table-column
+            v-else-if="field.type === 'text'"
+            :title="field.name"
+            :dataIndex="field.key"
+            :key="`text-${field.key}`"
+            width="14rem"
+            :filteredValue="
+              filterValues[field.key] ? [filterValues[field.key]] : null
+            "
+            ellipsis
+          >
+            <template #default="{ text }">
+              {{ text || '—' }}
+            </template>
+            <template
+              #filterDropdown="{
+                setSelectedKeys,
+                selectedKeys,
+                confirm,
+                column,
+                clearFilters,
+              }"
+            >
+              <div class="p-2">
+                <a-input
+                  :placeholder="`Gözleg ${column.title.toLowerCase()}`"
+                  :value="selectedKeys[0]"
+                  style="width: 188px; margin-bottom: 8px; display: block"
+                  @change="
+                    (e) =>
+                      setSelectedKeys(e.target.value ? [e.target.value] : [])
+                  "
+                  @pressEnter="
+                    handleSearch(selectedKeys, confirm, column.dataIndex)
+                  "
+                />
+                <a-button
+                  type="primary"
+                  size="small"
+                  style="width: 90px; margin-right: 8px"
+                  @click="handleSearch(selectedKeys, confirm, column.dataIndex)"
+                >
+                  <template #icon><SearchOutlined /></template>
+                  Search
+                </a-button>
+                <a-button
+                  size="small"
+                  style="width: 90px"
+                  @click="handleReset(column.dataIndex, clearFilters, confirm)"
+                >
+                  Reset
+                </a-button>
+              </div>
+            </template>
+          </a-table-column>
+
+          <a-table-column
+            v-else-if="field.type === 'date'"
+            :title="field.name"
+            :dataIndex="field.key"
+            :key="`date-${field.key}`"
+            width="14rem"
+            :filteredValue="filterValues[field.key] || null"
+            :sorter="true"
+            :sortOrder="sortField === field.key ? sortOrder : null"
+          >
+            <template #default="{ text }">
+              {{ text ? dayjs(text).format('DD.MM.YYYY') : '—' }}
+            </template>
+
+            <template
+              #filterDropdown="{ setSelectedKeys, confirm, clearFilters }"
+            >
+              <div class="p-2 w-64">
+                <a-range-picker
+                  v-model:value="dateRange[field.key]"
+                  format="YYYY-MM-DD"
+                  style="width: 100%; margin-bottom: 8px"
+                />
+
+                <div class="flex justify-between">
+                  <a-button
+                    size="small"
+                    @click="
+                      () => handleDateReset(field.key, clearFilters, confirm)
+                    "
+                  >
+                    Reset
+                  </a-button>
+
+                  <a-button
+                    type="primary"
+                    size="small"
+                    @click="
+                      () => handleDateApply(field.key, setSelectedKeys, confirm)
+                    "
+                  >
+                    OK
+                  </a-button>
+                </div>
+              </div>
+            </template>
+          </a-table-column>
+
+          <a-table-column
+            v-else-if="field.type === 'number'"
+            :title="field.name"
+            :dataIndex="field.key"
+            :key="`number-${field.key}`"
+            width="10rem"
+            :sorter="true"
+            :sortOrder="sortField === field.key ? sortOrder : null"
+            @change="onTableChange"
+            ellipsis
+          >
+            <template #default="{ text }">
+              <span class="font-medium text-gray-700">
+                {{ text }}
+              </span>
+            </template>
+          </a-table-column>
+        </template>
 
         <!-- system columns -->
         <a-table-column
@@ -180,14 +317,59 @@ const tempSelectedKeys = ref([]);
 const rowHighlights = ref({});
 
 const queryClient = useQueryClient();
+const sortField = ref('');
+const sortOrder = ref('');
+const filterValues = ref({});
+const dateRange = ref({});
 
-const queryKey = computed(() => ({
-  page: currentPage.value,
-  limit: pageSize.value,
-}));
-const query = computed(() => ['values', currentPage.value, pageSize.value]);
+const backendQuery = computed(() => {
+  const q = {
+    page: currentPage.value,
+    limit: pageSize.value,
+    sort: sortField.value || undefined,
+    order: sortOrder.value || undefined,
+  };
+
+  Object.entries(filterValues.value).forEach(([key, value]) => {
+    if (!value) return;
+
+    // TEXT
+    if (typeof value === 'string') {
+      if (value.trim()) {
+        q[key] = value.trim();
+      }
+    } else if (Array.isArray(value) && typeof value[0] === 'string') {
+      if (value.length > 0) {
+        q[key] = value.join(',');
+      }
+    } else if (Array.isArray(value) && value.length === 2) {
+      const [start, end] = value;
+
+      if (start && end && start.$d) {
+        q[`${key}From`] = dayjs(start).format('YYYY-MM-DD');
+        q[`${key}End`] = dayjs(end).format('YYYY-MM-DD');
+      }
+    }
+  });
+
+  Object.keys(q).forEach((key) => {
+    if (q[key] == null || q[key] === '') {
+      delete q[key];
+    }
+  });
+
+  return q;
+});
+
+const query = computed(() => [
+  'values',
+  currentPage.value,
+  pageSize.value,
+  JSON.stringify(backendQuery.value),
+]);
+
 const { isFetching, isLoading, isError, error, data } = useGetValues(
-  queryKey,
+  backendQuery,
   query
 );
 
@@ -216,6 +398,93 @@ watch(
   },
   { immediate: true }
 );
+const handleSearch = (selectedKeys, confirm, dataIndex) => {
+  confirm();
+  filterValues.value[dataIndex] = selectedKeys[0];
+  addQuery({ [dataIndex]: selectedKeys[0] });
+};
+
+const handleReset = (dataIndex, clearFilters, confirm) => {
+  clearFilters({
+    confirm: true,
+  });
+  filterValues.value[dataIndex] = '';
+  dateRange.value[dataIndex] = [];
+  confirm();
+  addQuery({ [dataIndex]: undefined });
+};
+
+const handleDateApply = (key, setSelectedKeys, confirm) => {
+  confirm();
+
+  const range = dateRange.value[key];
+
+  if (range && range.length === 2) {
+    const startDate = dayjs(range[0]).format('YYYY-MM-DD');
+    const endDate = dayjs(range[1]).format('YYYY-MM-DD');
+    filterValues.value[key] = [startDate, endDate];
+
+    setSelectedKeys(filterValues.value[key]);
+
+    addQuery({
+      [`${key}From`]: filterValues.value[key][0],
+      [`${key}End`]: filterValues.value[key][1],
+    });
+  }
+};
+
+const handleDateReset = (key, clearFilters, confirm) => {
+  clearFilters?.();
+  confirm();
+
+  filterValues.value[key] = [];
+  addQuery({
+    [`${key}From`]: undefined,
+    [`${key}End`]: undefined,
+  });
+};
+
+function onTableChange(pagination, filters, sorter) {
+  const query = {};
+  if (sorter?.field && sorter?.order) {
+    if (sortField.value !== sorter.field || sortOrder.value !== sorter.order) {
+      sortField.value = sorter.field;
+      sortOrder.value = sorter.order;
+      query.sort = sorter.field;
+      query.order = sorter.order === 'ascend' ? 'asc' : 'desc';
+    }
+  } else {
+    if (sortField.value || sortOrder.value) {
+      sortField.value = '';
+      sortOrder.value = '';
+      query.sort = undefined;
+      query.order = undefined;
+    }
+  }
+
+  if (data.value?.fields) {
+    data.value?.fields?.forEach((field) => {
+      if (field.type === 'enum') {
+        const queryKey = `enum-${field.key}`;
+        if (filters[queryKey]?.length > 0) {
+          if (
+            JSON.stringify(filterValues.value[field.key]) !==
+            JSON.stringify(filters[queryKey] || [])
+          ) {
+            filterValues.value[field.key] = filters[queryKey] || [];
+          }
+          if (filterValues.value[field.key].length > 0) {
+            query[field.key] = filterValues.value[field.key].join(',');
+          }
+        } else {
+          filterValues.value[field.key] = [];
+          query[field.key] = undefined;
+        }
+      }
+    });
+  }
+  addQuery(query);
+}
 const filteredFields = computed(() => {
   return (data.value?.fields || []).filter((f) =>
     selectedColumnKeys.value.includes(f.key)
@@ -244,19 +513,38 @@ function applyColumns() {
 function resetColumns() {
   tempSelectedKeys.value = allColumns.value.map((c) => c.key);
 }
+function getEnumColor(field, value) {
+  const enumItem = field?.enums?.find((row) => row.name === value);
+  return enumItem?.color || '#999';
+}
+const addQuery = (query) => {
+  const q = { ...route.query, ...query };
+
+  Object.keys(q).forEach((key) => {
+    if (!q[key]) {
+      delete q[key];
+    }
+  });
+
+  router.push({ query: q });
+};
+
 const onChange = (page, limit) => {
   const safePage = page > 0 ? page : 1;
 
   currentPage.value = safePage;
   pageSize.value = limit;
 
+  const query = route.query;
   router.push({
     query: {
+      ...query,
       page: safePage,
       limit,
     },
   });
 };
+
 function exportToExcel() {
   const tableData = data.value?.data || [];
   if (!tableData.length) return;
@@ -318,9 +606,50 @@ function exportToExcel() {
     `report_${dayjs().format('YYYY-MM-DD HH:mm').split(' ').join('_')}.xlsx`
   );
 }
+
+const reload = () => {
+  if (data.value?.fields) {
+    data.value?.fields?.forEach((field) => {
+      if (field.type === 'enum') {
+        if (route.query[field.key]) {
+          filterValues.value[field.key] = route.query[field.key].split(',');
+        } else {
+          filterValues.value[field.key] = [];
+        }
+      } else if (field.type === 'text') {
+        if (route.query[field.key]) {
+          filterValues.value[field.key] = route.query[field.key];
+        } else {
+          filterValues.value[field.key] = '';
+        }
+      } else if (field.type === 'date') {
+        const startKey = `${field.key}From`;
+        const endKey = `${field.key}End`;
+        if (route.query[startKey] && route.query[endKey]) {
+          filterValues.value[field.key] = [
+            dayjs(route.query[startKey], 'YYYY-MM-DD'),
+            dayjs(route.query[endKey], 'YYYY-MM-DD'),
+          ];
+          dateRange.value[field.key] = filterValues.value[field.key];
+        } else {
+          filterValues.value[field.key] = dateRange.value[field.key] = [];
+        }
+      }
+    });
+  }
+  if (route.query.sort) {
+    sortField.value = route.query.sort;
+    sortOrder.value = route.query.order === 'asc' ? 'ascend' : 'descend';
+  } else {
+    sortField.value = '';
+    sortOrder.value = '';
+  }
+};
+watch([() => route.query, () => data.value], reload);
+
 onMounted(() => {
   document.title = 'Başlyk | Hasabatlar';
-
+  reload();
   window.addEventListener('table:created', onCreated);
   window.addEventListener('table:updated', onUpdated);
   window.addEventListener('table:deleted', onDeleted);
@@ -358,9 +687,9 @@ function onImported(e) {
   );
 }
 function onCreated(e) {
-  const { rowNum, row } = e.detail;
+  const { rowId, row } = e.detail;
 
-  setHighlight(rowNum, 'created');
+  setHighlight(rowId, 'created');
 
   updateCache(
     (old) => {
@@ -371,13 +700,13 @@ function onCreated(e) {
 }
 
 function onUpdated(e) {
-  const { rowNum, updatedRow } = e.detail;
+  const { rowId, updatedRow } = e.detail;
 
-  setHighlight(rowNum, 'updated');
+  setHighlight(rowId, 'updated');
 
   updateCache(
     (old) => {
-      const index = old.findIndex((r) => r.rowNum === parseInt(rowNum));
+      const index = old.findIndex((r) => r.rowId === rowId);
       if (index === -1) return old;
 
       const updated = [...old];
@@ -394,14 +723,14 @@ function onUpdated(e) {
 }
 
 function onDeleted(e) {
-  const { rowNum } = e.detail;
+  const { rowId } = e.detail;
 
-  setHighlight(rowNum, 'deleted');
+  setHighlight(rowId, 'deleted');
 
   setTimeout(() => {
     updateCache(
       (old) => {
-        return old.filter((r) => r.rowNum !== parseInt(rowNum));
+        return old.filter((r) => r.rowId !== rowId);
       },
       (old) => old - 1
     );
@@ -409,7 +738,8 @@ function onDeleted(e) {
 }
 
 const getRowClass = (record) => {
-  const state = rowHighlights.value[Number(record.rowNum)];
+  const id = String(record.rowId);
+  const state = rowHighlights.value[id];
 
   return {
     'row-created': state === 'created',
@@ -417,23 +747,21 @@ const getRowClass = (record) => {
     'row-deleted': state === 'deleted',
   };
 };
+function setHighlight(rowId, type) {
+  const id = String(rowId);
 
-function setHighlight(rowNum, type) {
-  const id = parseInt(rowNum);
+  // set highlight
+  rowHighlights.value = {
+    ...rowHighlights.value,
+    [id]: type,
+  };
 
-  // delay to ensure DOM updated first
+  // auto remove after animation
   setTimeout(() => {
-    rowHighlights.value = {
-      ...rowHighlights.value,
-      [id]: type,
-    };
-
-    setTimeout(() => {
-      const copy = { ...rowHighlights.value };
-      delete copy[id];
-      rowHighlights.value = copy;
-    }, 2500);
-  }, 50); // 🔥 small delay = FIX
+    const copy = { ...rowHighlights.value };
+    delete copy[id];
+    rowHighlights.value = copy;
+  }, 2500);
 }
 </script>
 

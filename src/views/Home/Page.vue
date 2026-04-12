@@ -290,12 +290,7 @@
           </template>
         </a-table-column>
 
-        <a-table-column
-          v-if="selectedColumnKeys.includes('actions')"
-          title="Sazlamalar"
-          key="actions"
-          width="10rem"
-        >
+        <a-table-column title="Sazlamalar" key="actions" width="10rem">
           <template #default="{ record }">
             <div class="flex gap-2 items-center">
               <router-link
