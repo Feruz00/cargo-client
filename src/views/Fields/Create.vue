@@ -31,49 +31,62 @@
       class="bg-white mt-4 p-6 rounded-lg shadow-md max-w-full mx-auto"
     >
       <a-form layout="vertical" :model="form" @finish="onSubmit">
-        <!-- BASIC INFO -->
+        <!-- BASIC -->
         <div class="grid grid-cols-2 gap-4">
-          <!-- NAME -->
-          <a-form-item label="Ady" name="name" required>
-            <a-input v-model:value="form.name" placeholder="Ady giriziň" />
+          <a-form-item label="Ady" required>
+            <a-input v-model:value="form.name" />
           </a-form-item>
 
-          <!-- KEY -->
-          <a-form-item label="Key" name="key" required>
-            <a-input v-model:value="form.key" placeholder="key giriziň" />
+          <a-form-item label="Key" required>
+            <a-input v-model:value="form.key" />
           </a-form-item>
 
-          <!-- TYPE -->
-          <a-form-item label="Görnüş" name="type" required>
+          <a-form-item label="Görnüş" required>
             <a-select v-model:value="form.type">
               <a-select-option value="text">Text</a-select-option>
               <a-select-option value="number">Number</a-select-option>
               <a-select-option value="date">Date</a-select-option>
+              <a-select-option value="enum">Enum</a-select-option>
             </a-select>
           </a-form-item>
 
-          <!-- COMPUTED -->
           <a-form-item label="Hasaplanýan">
             <div class="flex items-center gap-3">
-              <a-switch v-model:checked="form.isComputed" />
-              <span>
-                {{ form.isComputed ? 'Hawa' : 'Ýok' }}
-              </span>
+              <a-switch
+                v-model:checked="form.isComputed"
+                :disabled="form.type === 'enum'"
+              />
+              <span>{{ form.isComputed ? 'Hawa' : 'Ýok' }}</span>
             </div>
           </a-form-item>
         </div>
 
         <!-- FORMULA -->
-        <a-form-item v-if="form.isComputed" label="Formula" required>
+        <a-form-item v-if="form.isComputed" label="Formula">
           <a-input
             v-model:value="form.formula"
-            placeholder="mysal: field1 + field2"
+            placeholder="mysal: weight * price"
           />
+        </a-form-item>
+
+        <a-form-item v-if="form.type === 'enum'" label="Enum bahalar">
+          <div class="flex flex-col gap-2 w-1/2">
+            <div
+              v-for="(item, index) in form.enums"
+              :key="index"
+              class="flex items-center gap-5"
+            >
+              <a-input v-model:value="item.name" placeholder="Ady" />
+              <HueSlider v-model="item.color" />
+              <CloseOutlined @click="removeEnum(index)" />
+            </div>
+
+            <a-button type="dashed" @click="addEnum"> + Täze goş </a-button>
+          </div>
         </a-form-item>
 
         <!-- USERS -->
         <a-form-item label="Ulanyjylar">
-          <!-- TOP BAR -->
           <div class="flex justify-between items-center mb-2">
             <span class="text-sm text-gray-500">
               {{ form.users.length }} saýlandy
@@ -84,7 +97,6 @@
             </a-button>
           </div>
 
-          <!-- LIST -->
           <div
             class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto border rounded p-3"
           >
@@ -94,9 +106,9 @@
               :checked="form.users.includes(user.id)"
               @change="togglePermission(user.id)"
             >
-              <div class="flex flex-row items-center gap-2 leading-tight">
+              <div class="flex gap-2">
                 <span>{{ user.name }}</span>
-                <span class="text-gray-400"> - {{ user.username }} </span>
+                <span class="text-gray-400">- {{ user.username }}</span>
               </div>
             </a-checkbox>
           </div>
@@ -112,9 +124,10 @@
     </div>
   </div>
 </template>
+
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
-import { ArrowLeftOutlined } from '@ant-design/icons-vue';
+import { ref, computed, watch, onMounted } from 'vue';
+import { ArrowLeftOutlined, CloseOutlined } from '@ant-design/icons-vue';
 import { useRouter } from 'vue-router';
 
 import Loading from '../../components/Loading.vue';
@@ -122,14 +135,14 @@ import Error from '../../components/Error.vue';
 
 import { useGetUsers } from '../User/useUsers';
 import { useCreateField } from './useFields';
+import { HueSlider } from 'vue-color';
+import { hueToHex } from '../../utils/color';
 
 const router = useRouter();
 
-/* API */
 const { isLoading, isError, error, data } = useGetUsers();
 const { mutate: createField, isPending: isCreating } = useCreateField();
 
-/* FORM */
 const form = ref({
   name: '',
   key: '',
@@ -137,9 +150,11 @@ const form = ref({
   isComputed: false,
   formula: '',
   users: [],
+  enums: [],
 });
+
 const users = ref([]);
-/* AUTO FORMAT KEY */
+
 watch(
   () => form.value.key,
   (val) => {
@@ -149,7 +164,28 @@ watch(
   }
 );
 
-/* TOGGLE USER */
+watch(
+  () => form.value.type,
+  (val) => {
+    if (val !== 'enum') {
+      form.value.enums = [];
+    }
+  }
+);
+
+const addEnum = () => {
+  form.value.enums.push({
+    id: form.value.enums.length + 1,
+    name: '',
+    color: '#999999',
+  });
+};
+
+const removeEnum = (index) => {
+  form.value.enums.splice(index, 1);
+};
+
+/* USERS */
 const togglePermission = (id) => {
   if (form.value.users.includes(id)) {
     form.value.users = form.value.users.filter((p) => p !== id);
@@ -158,43 +194,50 @@ const togglePermission = (id) => {
   }
 };
 
-/* SELECT ALL */
 const isAllSelected = computed(() => {
-  if (!data.value?.data) return false;
-
-  return data.value.data.every((u) => form.value.users.includes(u.id));
+  if (!users.value.length) return false;
+  return users.value.every((u) => form.value.users.includes(u.id));
 });
 
 const toggleAll = () => {
-  if (!data.value?.data) return;
-
   if (isAllSelected.value) {
     form.value.users = [];
   } else {
-    form.value.users = data.value.data.map((u) => u.id);
+    form.value.users = users.value.map((u) => u.id);
   }
 };
 
-/* SUBMIT */
 const onSubmit = () => {
-  createField(
-    {
-      ...form.value,
-      users: form.value.users,
+  const payload = {
+    ...form.value,
+    users: form.value.users,
+  };
+
+  if (form.value.type === 'enum') {
+    payload.enums = form.value.enums.map((e) => ({
+      name: e.name,
+      color: hueToHex(e.color),
+    }));
+  }
+
+  createField(payload, {
+    onSuccess: () => {
+      router.go(-1);
     },
-    {
-      onSuccess: () => {
-        router.go(-1);
-      },
-    }
-  );
+  });
 };
+
+/* LOAD USERS */
 watch(
   () => data.value,
   () => {
-    users.value = data.value.data.filter((row) => row.role === 'user');
+    users.value = (data.value?.data || []).filter((u) => u.role === 'user');
+  },
+  {
+    immediate: true,
   }
 );
+
 onMounted(() => {
   document.title = 'Admin | Sütün döretmek';
 });

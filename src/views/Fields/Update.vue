@@ -44,11 +44,12 @@
           </a-form-item>
 
           <!-- TYPE -->
-          <a-form-item label="Görnüş" name="type" required>
+          <a-form-item label="Görnüş" required>
             <a-select v-model:value="form.type">
               <a-select-option value="text">Text</a-select-option>
               <a-select-option value="number">Number</a-select-option>
               <a-select-option value="date">Date</a-select-option>
+              <a-select-option value="enum">Enum</a-select-option>
             </a-select>
           </a-form-item>
 
@@ -69,6 +70,22 @@
             v-model:value="form.formula"
             placeholder="mysal: field1 + field2"
           />
+        </a-form-item>
+        <!-- ENUMS -->
+        <a-form-item v-if="form.type === 'enum'" label="Enum bahalar">
+          <div class="flex flex-col gap-2 w-1/2">
+            <div
+              v-for="(item, index) in form.enums"
+              :key="index"
+              class="flex items-center gap-5"
+            >
+              <a-input v-model:value="item.name" placeholder="Ady" />
+              <HueSlider v-model="item.color" />
+              <CloseOutlined @click="removeEnum(index)" />
+            </div>
+
+            <a-button type="dashed" @click="addEnum"> + Täze goş </a-button>
+          </div>
         </a-form-item>
 
         <!-- USERS -->
@@ -102,9 +119,8 @@
           </div>
         </a-form-item>
 
-        <!-- SUBMIT -->
         <div class="flex justify-end mt-4">
-          <a-button type="primary" html-type="submit" :loading="isCreating">
+          <a-button type="primary" html-type="submit" :loading="isUpdating">
             Üýtgetmek
           </a-button>
         </div>
@@ -114,7 +130,7 @@
 </template>
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
-import { ArrowLeftOutlined } from '@ant-design/icons-vue';
+import { ArrowLeftOutlined, CloseOutlined } from '@ant-design/icons-vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import Loading from '../../components/Loading.vue';
@@ -122,6 +138,8 @@ import Error from '../../components/Error.vue';
 
 import { useGetUsers } from '../User/useUsers';
 import { useCreateField, useGetField, useUpdateField } from './useFields';
+import { HueSlider } from 'vue-color';
+import { hexToHue, hueToHex } from '../../utils/color';
 
 const router = useRouter();
 const route = useRoute();
@@ -145,6 +163,7 @@ const form = ref({
   isComputed: false,
   formula: '',
   users: [],
+  enums: [],
 });
 
 const users = ref([]);
@@ -158,8 +177,24 @@ watch(
     }
   }
 );
+watch(
+  () => form.value.type,
+  (val) => {
+    if (val !== 'enum') {
+      form.value.enums = [];
+    }
+  }
+);
+const addEnum = () => {
+  form.value.enums.push({
+    name: '',
+    color: '240',
+  });
+};
+const removeEnum = (index) => {
+  form.value.enums.splice(index, 1);
+};
 
-/* TOGGLE USER */
 const togglePermission = (id) => {
   if (form.value.users.includes(id)) {
     form.value.users = form.value.users.filter((p) => p !== id);
@@ -168,7 +203,6 @@ const togglePermission = (id) => {
   }
 };
 
-/* SELECT ALL */
 const isAllSelected = computed(() => {
   if (!data.value?.data) return false;
 
@@ -185,29 +219,41 @@ const toggleAll = () => {
   }
 };
 
-/* SUBMIT */
 const onSubmit = () => {
-  const data = {
-    ...form.value,
-    users: form.value.users,
-  };
-  updateField(
-    {
-      data,
-      id: id.value,
-    },
-    {
-      onSuccess: () => {
-        router.go(-1);
-      },
+  try {
+    const payload = {
+      ...form.value,
+      users: form.value.users,
+    };
+
+    if (form.value.type === 'enum') {
+      payload.enums = form.value.enums.map((e) => ({
+        name: e.name,
+        color: hueToHex(e.color),
+      }));
     }
-  );
+
+    updateField(
+      {
+        data: payload,
+        id: id.value,
+      },
+      {
+        onSuccess: () => {
+          router.go(-1);
+        },
+      }
+    );
+  } catch (err) {
+    console.error('SUBMIT ERROR:', err);
+  }
 };
 
 const reload = () => {
   if (field.value) {
     const val = field.value.data.field;
     const per = field.value.data.users;
+    const enums = field.value.data.field?.enums;
     form.value.name = val.name;
     form.value.isComputed = val.isComputed;
     form.value.key = val.key;
@@ -215,6 +261,11 @@ const reload = () => {
     form.value.formula = val.formula;
 
     form.value.users = per?.map((row) => row.userId);
+
+    form.value.enums = enums?.map((row) => ({
+      name: row.name,
+      color: hexToHue(row.color),
+    }));
   }
 };
 watch(() => field.value, reload);
@@ -222,6 +273,9 @@ watch(
   () => data.value,
   () => {
     users.value = data.value.data.filter((row) => row.role === 'user');
+  },
+  {
+    immediate: true,
   }
 );
 onMounted(() => {

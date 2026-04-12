@@ -11,6 +11,7 @@ import router from './router/router';
 
 import 'nprogress/nprogress.css';
 import './style.css';
+import 'vue-color/style.css';
 
 import Toaster from 'vue-sonner';
 import 'vue-sonner/style.css';
