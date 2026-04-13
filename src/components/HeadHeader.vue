@@ -35,10 +35,10 @@
               Ulanyjylar
             </a-menu-item>
 
-            <a-menu-item key="/head/chart" @click="go('/head/chart')">
+            <!-- <a-menu-item key="/head/chart" @click="go('/head/chart')">
               <LineChartOutlined class="mr-2" />
               Grafiki seljerme
-            </a-menu-item>
+            </a-menu-item> -->
           </a-menu>
 
           <a-dropdown>
@@ -98,7 +98,7 @@
           Ulanyjylar
         </a-button>
 
-        <a-button
+        <!-- <a-button
           type="text"
           block
           class="flex items-center justify-start gap-2"
@@ -106,7 +106,7 @@
         >
           <LineChartOutlined />
           Grafiki seljerme
-        </a-button>
+        </a-button> -->
 
         <a-button
           danger

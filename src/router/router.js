@@ -8,6 +8,7 @@ import fieldRouter from '../views/Fields/router';
 import homeRouter from '../views/Home/router';
 import scrollRestoration from '../plugins/scrollRestoration';
 import headRouter from '../views/Head/router';
+import chartRoutes from '../views/Charts/router';
 
 const withScroll = (route) => ({
   ...route,
@@ -39,7 +40,7 @@ const routes = [
     component: () => import('../layout/HeadLayout.vue'),
     meta: { auth: true },
     redirect: { name: 'head' },
-    children: [...headRouter].map((row) => withScroll(row)),
+    children: [...headRouter, ...chartRoutes].map((row) => withScroll(row)),
   },
 
   ...loginRouter,
