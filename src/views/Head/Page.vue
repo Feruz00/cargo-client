@@ -67,7 +67,9 @@
         :dataSource="data?.data || []"
         :loading="isFetching"
         :pagination="false"
-        :rowKey="(record) => record.rowId"
+        :rowKey="
+          (record) => record.rowNum + '-' + (rowHighlights[record.rowNum] || '')
+        "
         :rowClassName="getRowClass"
         @change="onTableChange"
         bordered
@@ -688,9 +690,9 @@ function onImported(e) {
   );
 }
 function onCreated(e) {
-  const { rowId, row } = e.detail;
-
-  setHighlight(rowId, 'created');
+  const { row } = e.detail;
+  // console.log(row);
+  setHighlight(row.rowNum, 'created');
 
   updateCache(
     (old) => {
@@ -701,13 +703,14 @@ function onCreated(e) {
 }
 
 function onUpdated(e) {
-  const { rowId, updatedRow } = e.detail;
-
-  setHighlight(rowId, 'updated');
+  const { updatedRow } = e.detail;
+  // console.log(updatedRow);
+  setHighlight(updatedRow.rowNum, 'updated');
 
   updateCache(
     (old) => {
-      const index = old.findIndex((r) => r.rowId === rowId);
+      // console.log(old);
+      const index = old.findIndex((r) => r.rowNum === updatedRow.rowNum);
       if (index === -1) return old;
 
       const updated = [...old];
@@ -724,14 +727,14 @@ function onUpdated(e) {
 }
 
 function onDeleted(e) {
-  const { rowId } = e.detail;
-
-  setHighlight(rowId, 'deleted');
+  const { deletedRow } = e.detail;
+  // console.log(e.detail);
+  setHighlight(deletedRow.rowNum, 'deleted');
 
   setTimeout(() => {
     updateCache(
       (old) => {
-        return old.filter((r) => r.rowId !== rowId);
+        return old.filter((r) => r.rowNum !== deletedRow.rowNum);
       },
       (old) => old - 1
     );
@@ -739,8 +742,8 @@ function onDeleted(e) {
 }
 
 const getRowClass = (record) => {
-  const id = String(record.rowId);
-  const state = rowHighlights.value[id];
+  // console.log(record.rowNum, typeof record.rowNum);
+  const state = rowHighlights.value[record.rowNum];
 
   return {
     'row-created': state === 'created',
@@ -748,21 +751,26 @@ const getRowClass = (record) => {
     'row-deleted': state === 'deleted',
   };
 };
-function setHighlight(rowId, type) {
-  const id = String(rowId);
 
-  // set highlight
-  rowHighlights.value = {
-    ...rowHighlights.value,
-    [id]: type,
-  };
+function setHighlight(rowNum, type) {
+  const id = rowNum;
 
-  // auto remove after animation
-  setTimeout(() => {
-    const copy = { ...rowHighlights.value };
-    delete copy[id];
-    rowHighlights.value = copy;
-  }, 2500);
+  if (typeof rowNum === 'number') {
+    // console.log(rowNum, typeof rowNum);
+
+    setTimeout(() => {
+      rowHighlights.value = {
+        ...rowHighlights.value,
+        [id]: type,
+      };
+
+      setTimeout(() => {
+        const copy = { ...rowHighlights.value };
+        delete copy[id];
+        rowHighlights.value = copy;
+      }, 2500);
+    }, 50); // 🔥 small delay = FIX
+  }
 }
 </script>
 
