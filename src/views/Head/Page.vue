@@ -691,15 +691,17 @@ function onImported(e) {
 }
 function onCreated(e) {
   const { row } = e.detail;
-  // console.log(row);
-  setHighlight(row.rowNum, 'created');
 
-  updateCache(
-    (old) => {
-      return [row, ...old];
-    },
-    (old) => old + 1
-  );
+  if (currentPage.value === 1) {
+    setHighlight(row.rowNum, 'created');
+
+    updateCache(
+      (old) => {
+        return [row, ...old];
+      },
+      (old) => old + 1
+    );
+  }
 }
 
 function onUpdated(e) {
